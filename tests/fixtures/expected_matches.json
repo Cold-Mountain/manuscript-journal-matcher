@@ -1,0 +1,131 @@
+{
+  "test_fixtures": {
+    "sample_medical_paper.txt": {
+      "expected_title": "Machine Learning Applications in Cardiovascular Disease Prediction: A Comprehensive Study",
+      "expected_abstract_keywords": [
+        "cardiovascular disease",
+        "machine learning",
+        "prediction",
+        "electronic health records",
+        "clinical decision support"
+      ],
+      "expected_journal_types": [
+        "medical",
+        "health informatics",
+        "cardiology",
+        "artificial intelligence"
+      ],
+      "expected_high_similarity_terms": [
+        "medical",
+        "healthcare",
+        "clinical",
+        "patient",
+        "diagnosis"
+      ]
+    },
+    "sample_cs_paper.txt": {
+      "expected_title": "Attention-Based Neural Machine Translation with Enhanced Context Modeling",
+      "expected_abstract_keywords": [
+        "neural machine translation",
+        "attention mechanism",
+        "transformer",
+        "context modeling",
+        "natural language processing"
+      ],
+      "expected_journal_types": [
+        "computer science",
+        "artificial intelligence",
+        "natural language processing",
+        "machine learning"
+      ],
+      "expected_high_similarity_terms": [
+        "neural",
+        "machine learning",
+        "artificial intelligence",
+        "algorithm",
+        "computer science"
+      ]
+    },
+    "sample_biology_paper.txt": {
+      "expected_title": "CRISPR-Cas9 Mediated Gene Editing for Treatment of Inherited Retinal Dystrophies",
+      "expected_abstract_keywords": [
+        "CRISPR-Cas9",
+        "gene editing",
+        "inherited retinal dystrophy",
+        "Leber congenital amaurosis",
+        "gene therapy"
+      ],
+      "expected_journal_types": [
+        "biology",
+        "genetics",
+        "gene therapy",
+        "molecular biology",
+        "biotechnology"
+      ],
+      "expected_high_similarity_terms": [
+        "gene",
+        "genetic",
+        "biology",
+        "molecular",
+        "therapy"
+      ]
+    }
+  },
+  "test_scenarios": [
+    {
+      "name": "medical_ai_query",
+      "query": "machine learning applications in medical diagnosis and healthcare",
+      "expected_matches": [
+        {
+          "should_match": "sample_medical_paper.txt",
+          "min_similarity": 0.7,
+          "expected_rank": 1
+        }
+      ]
+    },
+    {
+      "name": "nlp_ai_query", 
+      "query": "natural language processing neural networks attention mechanisms",
+      "expected_matches": [
+        {
+          "should_match": "sample_cs_paper.txt",
+          "min_similarity": 0.6,
+          "expected_rank": 1
+        }
+      ]
+    },
+    {
+      "name": "gene_editing_query",
+      "query": "CRISPR gene editing therapeutic applications genetic diseases",
+      "expected_matches": [
+        {
+          "should_match": "sample_biology_paper.txt", 
+          "min_similarity": 0.8,
+          "expected_rank": 1
+        }
+      ]
+    }
+  ],
+  "quality_metrics": {
+    "min_abstract_length": 500,
+    "expected_sections": [
+      "abstract",
+      "introduction", 
+      "methods",
+      "results",
+      "conclusion"
+    ],
+    "similarity_thresholds": {
+      "excellent": 0.9,
+      "good": 0.7,
+      "acceptable": 0.5,
+      "poor": 0.3
+    }
+  },
+  "performance_benchmarks": {
+    "max_extraction_time_seconds": 5.0,
+    "max_embedding_time_seconds": 2.0,
+    "max_search_time_seconds": 1.0,
+    "max_memory_increase_mb": 500
+  }
+}

@@ -1,0 +1,26 @@
+CRISPR-Cas9 Mediated Gene Editing for Treatment of Inherited Retinal Dystrophies
+
+Abstract: Inherited retinal dystrophies (IRDs) are a group of genetic disorders that cause progressive vision loss and blindness, affecting over 2 million people worldwide. This study demonstrates the therapeutic potential of CRISPR-Cas9 gene editing for treating Leber congenital amaurosis 10 (LCA10), caused by mutations in the CEP290 gene. We developed a dual adeno-associated virus (AAV) system to deliver CRISPR components targeting the common CEP290 mutation c.2991+1655A>G. In vitro experiments using patient-derived induced pluripotent stem cells (iPSCs) showed successful correction of the mutation in 78% of treated cells, with restored CEP290 protein expression and improved cilia function. In vivo studies using rd16 mice demonstrated significant preservation of photoreceptor cells and improved visual function as measured by electroretinography. Safety analyses revealed minimal off-target effects and no adverse immune responses. These findings support the clinical translation of CRISPR-based therapies for IRDs and provide a foundation for treating other inherited blindness conditions.
+
+Keywords: CRISPR-Cas9, gene editing, inherited retinal dystrophy, Leber congenital amaurosis, CEP290, gene therapy
+
+1. Introduction
+Inherited retinal dystrophies encompass over 260 genes associated with progressive photoreceptor degeneration. CEP290 mutations are responsible for approximately 15% of Leber congenital amaurosis cases, making it an attractive target for gene therapy approaches.
+
+2. Materials and Methods
+Patient iPSCs were differentiated into retinal organoids using established protocols. CRISPR-Cas9 components were delivered using dual AAV vectors optimized for retinal transduction. Molecular analyses included qPCR, Western blotting, and immunofluorescence microscopy.
+
+3. Results
+Gene editing efficiency was confirmed by next-generation sequencing, showing precise correction of the CEP290 mutation. Functional assays demonstrated restored protein localization to the ciliary transition zone and improved ciliary assembly.
+
+4. In Vivo Studies
+Subretinal injection of AAV-CRISPR vectors in rd16 mice resulted in significant photoreceptor preservation compared to controls. Electroretinography showed improved light responses at 12 weeks post-injection.
+
+5. Safety Assessment
+Comprehensive off-target analysis using GUIDE-seq revealed minimal unintended editing events. Histological examination showed no signs of inflammation or toxicity in treated retinas.
+
+6. Discussion
+These results demonstrate the feasibility of CRISPR-based correction for CEP290-associated blindness. The dual AAV delivery system offers advantages for clinical translation, including established safety profiles and retinal tropism.
+
+7. Conclusion
+CRISPR-Cas9 gene editing represents a promising therapeutic approach for inherited retinal dystrophies, with potential for treating multiple forms of genetic blindness through targeted correction of disease-causing mutations.
