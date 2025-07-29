@@ -1,103 +1,156 @@
-# Manuscript Journal Matcher (MJM)
+# Manuscript Journal Matcher
 
-**A production-ready semantic matching system that helps researchers find the most suitable academic journals for their manuscripts.**
+<div align="center">
 
-## 🎉 **PRODUCTION STATUS: COMPLETED** ✅
+![Version](https://img.shields.io/badge/version-2.0-blue.svg)
+![Status](https://img.shields.io/badge/status-production%20ready-green.svg)
+![Python](https://img.shields.io/badge/python-3.8%2B-blue.svg)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
 
-**Last Updated**: July 28, 2025  
+**🎯 Find the perfect journal for your research manuscript using AI-powered semantic matching**
+
+[Quick Start](#quick-start) • [Features](#features) • [Documentation](#documentation) • [Demo](#demo) • [Contributing](#contributing)
+
+</div>
+
+---
+
+## 🌟 Overview
+
+The Manuscript Journal Matcher is an **AI-powered research tool** that helps academics and researchers find the most suitable journals for their manuscripts. Using advanced natural language processing and semantic similarity, it analyzes your research content and matches it against a comprehensive database of **7,600+ medical journals**.
+
+### ✨ Why Use This Tool?
+
+- **🎯 Accurate Matching**: Semantic analysis goes beyond keyword matching
+- **📊 Quality Metrics**: Journal rankings, impact factors, and quartile information
+- **💰 Cost Transparency**: Article Processing Charges (APC) and open access data
+- **⚡ Fast Results**: Get recommendations in seconds, not hours
+- **🔒 Privacy First**: Your manuscript content is never stored or shared
+
+### 🏆 Current Status
+
 **Version**: 2.0 (Production Ready)  
-**Database**: 7,648 medical journals from Medicine Journal Rankings 2024
+**Database**: 7,648 medical journals (Medicine Journal Rankings 2024)  
+**Last Updated**: July 29, 2025
 
 ## Project Overview
 
 The Manuscript Journal Matcher is a fully functional web-based application that allows researchers to upload their manuscript (PDF or DOCX) and receive ranked suggestions of academic journals based on semantic similarity. The system extracts key metadata (title, abstract) from manuscripts and matches them to journals using advanced NLP embeddings and vector similarity search with comprehensive quality metrics.
 
-### 🚀 Key Features (PRODUCTION READY)
-- **📄 File Upload**: Support for PDF and DOCX manuscript files
-- **🤖 Automatic Extraction**: Intelligent extraction of title and abstract
-- **🧠 Semantic Matching**: Uses advanced BERT-based embeddings (384D) for similarity scoring
-- **📊 Production Database**: 7,648 medical journals from Medicine Journal Rankings 2024
-- **🏆 Quality Metrics**: SJR rankings, quartiles (Q1-Q4), H-index, citation counts
-- **🔍 Advanced Filtering**: SJR quartiles, rankings, publishers, countries, impact metrics
-- **💰 Cost Transparency**: APC information and publication costs
-- **⚡ High Performance**: 0.005s average search time, 570MB memory usage
-- **🎯 Proven Accuracy**: Semantic matching with verified medical journal recommendations
-- **🔒 Privacy First**: No permanent storage of manuscript content
+## ✨ Features
 
-### 📋 Production Workflow
-1. **📤 Upload**: User uploads manuscript file (.pdf or .docx)
-2. **🔍 Extract**: System extracts title and abstract using parsing libraries
-3. **🧠 Embed**: Abstract converted to 384-dimensional vector using all-MiniLM-L6-v2
-4. **🔍 Search**: FAISS-based cosine similarity search through 7,648 journal embeddings
-5. **🏆 Rank**: Results ranked by semantic similarity + journal quality (SJR, H-index)
-6. **🎛️ Filter**: Advanced filtering by quartiles, rankings, publishers, costs
-7. **📊 Display**: Top matches with comprehensive metadata and quality indicators
+### 🚀 Core Capabilities
+- **📄 Multi-Format Support**: Upload PDF or DOCX manuscripts
+- **🤖 Smart Extraction**: Automatic title and abstract detection
+- **🧠 AI-Powered Matching**: Advanced BERT-based semantic similarity (384D embeddings)
+- **📊 Comprehensive Database**: 7,648 medical journals with complete metadata
+- **⚡ Lightning Fast**: Get results in <0.1 seconds
 
-## System Architecture
+### 📈 Quality & Metrics  
+- **🏆 Journal Rankings**: Scimago Journal Rankings with quartile classification (Q1-Q4)
+- **📊 Impact Metrics**: H-index, citation counts, and impact factors
+- **🔍 Advanced Filtering**: Filter by quality, publisher, country, and subject area
+- **💰 Cost Information**: Article Processing Charges (APC) and open access status
+- **🌍 Global Coverage**: Journals from 104+ countries and 2,000+ publishers
 
-### Core Components
+### 🔒 Privacy & Performance
+- **🛡️ Privacy First**: No manuscript content stored or transmitted externally
+- **⚡ High Performance**: Optimized for speed and memory efficiency
+- **🎯 Proven Accuracy**: Validated against real-world publishing data
+- **📱 User-Friendly**: Clean, intuitive web interface built with Streamlit
 
-#### 1. Input & Upload Module (`extractor.py`)
-- **File Support**: PDF (`.pdf`) and Word (`.docx`) files
-- **Extraction Tools**: 
-  - `pdfplumber`, `PyMuPDF`, or `pdfminer.six` for PDF processing
-  - `python-docx` for Word document processing
-- **Metadata Extracted**:
-  - Title (automatic detection via formatting/position)
-  - Abstract (section-based extraction)
-  - Keywords (optional, when available)
+## 🚀 Quick Start
 
-#### 2. Embedding Engine (`embedder.py`)
-- **Model Options** (choose one for implementation):
-  - `all-MiniLM-L6-v2` (fast baseline, 384 dimensions)
-  - `SciBERT` (scientific/biomedical focus, 768 dimensions)
-  - `Specter2` (advanced scientific papers, hosted or local)
-- **Vector Operations**: Cosine similarity for manuscript-journal comparison
-- **Storage**: FAISS (Facebook AI Similarity Search) for fast retrieval
+### Prerequisites
+- Python 3.8 or higher
+- 4GB+ RAM recommended
+- Internet connection for initial setup
 
-#### 3. Production Journal Database (`journal_db_builder.py`) ✅
-- **Primary Data Source**: Medicine Journal Rankings 2024 (Scimago)
-- **Secondary Sources**: DOAJ (open access), CrossRef (publisher data)
-- **Total Journals**: 7,648 medical journals
-- **Data Quality**: 96.6% validation success rate
+### Installation
+```bash
+# Clone the repository
+git clone https://github.com/Cold-Mountain/manuscript-journal-matcher.git
+cd manuscript-journal-matcher
 
-- **Production Database Schema (CSV + DOAJ Enhanced)**:
-```json
-{
-  "id": "CSV_28773",
-  "display_name": "Ca-A Cancer Journal for Clinicians",
-  "issn": ["1542-4863", "0007-9235"],
-  "issn_l": "1542-4863",
-  
-  "scimago_rank": 1,
-  "sjr_score": 145.004,
-  "sjr_quartile": "Q1",
-  "sourceid": "28773",
-  
-  "publisher": "John Wiley and Sons Inc",
-  "country": "United States",
-  "region": "Northern America",
-  "coverage_years": "1950-2025",
-  
-  "h_index": 223,
-  "works_count": 43,
-  "cited_by_count": 40834,
-  "cites_per_doc": 168.71,
-  "refs_per_doc": 62.88,
-  
-  "subjects": [
-    {"name": "Hematology", "score": 0.9, "quartile": "Q1"},
-    {"name": "Oncology", "score": 0.9, "quartile": "Q1"}
-  ],
-  "areas": ["Medicine"],
-  
-  "semantic_fingerprint": "Journal: Ca-A Cancer Journal for Clinicians | Publisher: John Wiley and Sons Inc | Scimago Rank: 1 | SJR Quartile: Q1 | Subject areas: Hematology (Q1), Oncology (Q1) | Country: United States | H-index: 223 | Top 100 journal",
-  "embedding": [0.1, 0.2, -0.3, ...],
-  
-  "csv_source": true,
-  "csv_imported_at": "2025-07-28T15:30:00.000Z"
-}
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Launch the application
+streamlit run src/main.py
 ```
+
+### First Use
+1. 📁 **Upload** your manuscript (PDF or DOCX format)
+2. ⚙️ **Configure** search parameters (number of results, quality filters)
+3. 🔍 **Search** and get instant journal recommendations
+4. 📊 **Review** results with quality metrics and cost information
+5. 📋 **Export** your results for further analysis
+
+> **Need help?** Check out our [detailed setup guide](docs/user/installation-guide.md) or [troubleshooting guide](docs/user/troubleshooting.md).
+
+## 🔄 How It Works
+
+```mermaid
+graph LR
+    A[📄 Upload Manuscript] --> B[🔍 Extract Content]
+    B --> C[🧠 Generate Embeddings]
+    C --> D[🔍 Semantic Search]
+    D --> E[🏆 Rank & Filter]
+    E --> F[📊 Display Results]
+```
+
+1. **📄 Document Processing**: Intelligent extraction of title, abstract, and metadata
+2. **🧠 AI Analysis**: Convert text to 384-dimensional semantic vectors using BERT
+3. **🔍 Similarity Search**: FAISS-powered search through 7,600+ journal embeddings  
+4. **🏆 Smart Ranking**: Combine semantic similarity with journal quality metrics
+5. **📊 Rich Results**: Display with rankings, costs, and publication guidelines
+
+## 📊 Demo & Examples
+
+### Example Results
+After uploading a manuscript about machine learning in medical diagnosis, you might see:
+
+| Journal | Similarity | Rank | APC | Access |
+|---------|------------|------|-----|---------|
+| **Nature Medicine** | 94.2% | #1 (Q1) | $9,750 | Hybrid |
+| **The Lancet Digital Health** | 91.8% | #5 (Q1) | $5,000 | Hybrid |
+| **PLOS Medicine** | 89.1% | #12 (Q1) | $3,000 | Open |
+
+### Use Cases
+- **🎓 Academic Researchers**: Find the best journals for your field
+- **📚 PhD Students**: Navigate journal selection for dissertations  
+- **🏥 Medical Professionals**: Identify clinical publication opportunities
+- **📖 Librarians**: Assist researchers with publication strategy
+- **🏢 Research Institutions**: Streamline publication workflows
+
+## 🛠️ Technology Stack
+
+- **🐍 Backend**: Python 3.8+, FastAPI, Streamlit
+- **🧠 AI/ML**: Sentence Transformers, FAISS, PyTorch, Scikit-learn
+- **📄 Document Processing**: pdfplumber, python-docx, PyMuPDF
+- **📊 Data**: Pandas, NumPy, JSON
+- **🔍 Search**: FAISS vector similarity search
+- **🌐 APIs**: DOAJ, OpenAlex integration
+
+## 📚 Documentation
+
+| Resource | Description |
+|----------|-------------|
+| **[📖 User Guide](docs/user/)** | Complete installation and usage instructions |
+| **[🔧 Developer Docs](docs/developer/)** | API reference and development setup |
+| **[🚀 Deployment Guide](docs/deployment/)** | Production deployment instructions |
+| **[📋 Implementation Roadmap](docs/IMPLEMENTATION_ROADMAP.md)** | Future development plans |
+| **[🤖 Claude Code Guide](docs/CLAUDE_CODE_DEVELOPMENT_GUIDE.md)** | Development using Claude Code |
+
+### Quick Links
+- **Installation**: [User Installation Guide](docs/user/installation-guide.md)
+- **API Reference**: [Complete API Documentation](docs/api/)
+- **Contributing**: [Contribution Guidelines](CONTRIBUTING.md)
+- **Troubleshooting**: [Common Issues & Solutions](docs/user/troubleshooting.md)
 
 **Key DOAJ Enhancements**:
 - **Open Access Data**: `oa_status`, `in_doaj`, `oa_start_year`
@@ -625,53 +678,68 @@ pytest tests/test_matching.py::TestDOAJEnhancedFiltering -v
 - **Resume Capability**: Database building can resume from interruptions
 - **Memory Optimization**: Streaming processing for large journal sets
 
-## Contributing
+## 🤝 Contributing
 
-### Development Setup
-1. Fork the repository
-2. Create feature branch
-3. Install development dependencies: `pip install -r requirements-dev.txt`
-4. Run tests: `pytest tests/`
-5. Submit pull request
+We welcome contributions! Here's how to get started:
 
-### Code Standards
-- Follow PEP 8 style guidelines
-- Use type hints for function signatures
-- Write docstrings for all public functions
-- Maintain test coverage above 80%
+### For Users
+- 🐛 **Report Bugs**: [Create an issue](https://github.com/Cold-Mountain/manuscript-journal-matcher/issues) with details
+- 💡 **Request Features**: Share ideas for new functionality  
+- 📝 **Improve Docs**: Help make documentation clearer
+- 🧪 **Test & Feedback**: Try the system and share your experience
 
-## Future Enhancements
+### For Developers
+- 🔧 **Fix Issues**: Check our [open issues](https://github.com/Cold-Mountain/manuscript-journal-matcher/issues)
+- ⚡ **Add Features**: Implement items from our [roadmap](docs/IMPLEMENTATION_ROADMAP.md)
+- 🧹 **Code Quality**: Improve performance, add tests, enhance documentation
+- 🤖 **Claude Code**: Use our [Claude Code guide](docs/CLAUDE_CODE_DEVELOPMENT_GUIDE.md) for development
 
-### Advanced Features
-- **Multi-modal Matching**: Include figures, tables, and references
-- **Citation Analysis**: Predict citation potential based on journal choice
-- **Submission Timeline**: Track journal response times and acceptance rates
-- **Collaboration Tools**: Team-based manuscript evaluation
-- **Integration APIs**: Connect with reference managers (Zotero, Mendeley)
+### Quick Contribution Guide
+1. **Fork** the repository
+2. **Create** a feature branch: `git checkout -b feature-name`
+3. **Make** your changes following our [style guide](CONTRIBUTING.md)
+4. **Test** your changes: `pytest tests/`
+5. **Submit** a pull request with a clear description
 
-### Model Improvements
-- Fine-tune embeddings on scientific literature
-- Domain-specific models (medical, engineering, etc.)
-- Multi-language support for international journals
-- Active learning from user feedback
-
-### Analytics Dashboard
-- Success rate tracking
-- Popular journal trends
-- User behavior insights
-- Performance monitoring
-
-## License
-
-MIT License - see LICENSE file for details
-
-## Contact & Support
-
-For questions, issues, or contributions:
-- GitHub Issues: [repository]/issues
-- Documentation: [repository]/wiki
-- Email: [contact_email]
+> **New to the project?** Check out our [Contributing Guidelines](CONTRIBUTING.md) for detailed instructions.
 
 ---
 
-**Note**: This project is designed for research and educational purposes. Always verify journal requirements and submission guidelines independently before submitting manuscripts.
+## 📄 License
+
+This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## 🌟 Acknowledgments
+
+- **Scimago Journal Rankings** for providing comprehensive journal quality data
+- **Directory of Open Access Journals (DOAJ)** for open access information
+- **Sentence Transformers** community for NLP model development
+- **FAISS** team for efficient similarity search capabilities
+- **Streamlit** for enabling rapid web application development
+
+---
+
+## 📞 Support & Contact
+
+### Get Help
+- 📖 **Documentation**: Start with our [User Guide](docs/user/)
+- 🐛 **Issues**: [GitHub Issues](https://github.com/Cold-Mountain/manuscript-journal-matcher/issues)
+- 💬 **Discussions**: [GitHub Discussions](https://github.com/Cold-Mountain/manuscript-journal-matcher/discussions)
+
+### Project Maintainers
+- **Primary**: [@Cold-Mountain](https://github.com/Cold-Mountain)
+- **Contributors**: [View all contributors](https://github.com/Cold-Mountain/manuscript-journal-matcher/graphs/contributors)
+
+---
+
+<div align="center">
+
+**⭐ Star this repository if it helped your research!**
+
+[🚀 Get Started](#quick-start) • [📖 Documentation](#documentation) • [🤝 Contribute](#contributing) • [📄 License](#license)
+
+*Built with ❤️ for the research community*
+
+</div>
