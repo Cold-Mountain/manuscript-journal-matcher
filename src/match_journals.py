@@ -29,6 +29,9 @@ try:
     )
     from .journal_db_builder import load_journal_database
     from .embedder import embed_text, get_model
+    from .study_classifier import StudyTypeClassifier, classify_manuscript_study_type
+    from .multimodal_analyzer import MultiModalContentAnalyzer, ContentSection
+    from .journal_ranker import JournalRankingIntegrator, integrate_journal_rankings
 except ImportError:
     from config import (
         JOURNAL_METADATA_PATH,
@@ -39,6 +42,9 @@ except ImportError:
     )
     from journal_db_builder import load_journal_database
     from embedder import embed_text, get_model
+    from study_classifier import StudyTypeClassifier, classify_manuscript_study_type
+    from multimodal_analyzer import MultiModalContentAnalyzer, ContentSection
+    from journal_ranker import JournalRankingIntegrator, integrate_journal_rankings
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -70,6 +76,13 @@ class JournalMatcher:
         self.faiss_index: Optional[faiss.Index] = None
         self.embeddings: Optional[np.ndarray] = None
         self.embedding_dimension: Optional[int] = None
+        
+        # Initialize study type classifier and multi-modal analyzer
+        self.study_classifier = StudyTypeClassifier()
+        self.multimodal_analyzer = MultiModalContentAnalyzer()
+        
+        # Initialize journal ranking integrator
+        self.ranking_integrator = None
         
         logger.info(f"Initialized JournalMatcher with index: {self.index_path}")
     
@@ -107,6 +120,14 @@ class JournalMatcher:
             
             # Create or load FAISS index
             self.faiss_index = self._create_or_load_faiss_index()
+            
+            # Initialize journal ranking integrator
+            try:
+                self.ranking_integrator = JournalRankingIntegrator()
+                logger.info("Journal ranking integrator initialized")
+            except Exception as e:
+                logger.warning(f"Failed to initialize ranking integrator: {e}")
+                self.ranking_integrator = None
             
             logger.info("✅ Journal database loaded successfully")
             
@@ -204,18 +225,26 @@ class JournalMatcher:
     
     def search_similar_journals(self, query_text: str, top_k: int = None,
                                min_similarity: float = None,
-                               filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+                               filters: Optional[Dict[str, Any]] = None,
+                               include_study_classification: bool = True,
+                               use_multimodal_analysis: bool = True,
+                               use_ensemble_matching: bool = False,
+                               include_ranking_analysis: bool = True) -> List[Dict[str, Any]]:
         """
-        Find journals most similar to the given query text.
+        Find journals most similar to the given query text with enhanced analysis options.
         
         Args:
-            query_text: Text to search for (typically manuscript abstract)
+            query_text: Text to search for (typically manuscript abstract or full text)
             top_k: Number of top results to return
             min_similarity: Minimum similarity threshold
             filters: Additional filters to apply to results
+            include_study_classification: Whether to classify study type and use for matching
+            use_multimodal_analysis: Whether to use multi-modal content analysis
+            use_ensemble_matching: Whether to use ensemble matching methods
+            include_ranking_analysis: Whether to integrate journal ranking analysis
             
         Returns:
-            List of matching journals with similarity scores
+            List of matching journals with similarity scores and enhanced analysis
             
         Raises:
             MatchingError: If search fails
@@ -226,6 +255,10 @@ class JournalMatcher:
         # Load database if not already loaded
         self.load_database()
         
+        # Use ensemble matching if requested
+        if use_ensemble_matching:
+            return self._ensemble_search(query_text, top_k, min_similarity, filters)
+        
         # Set defaults
         if top_k is None:
             top_k = DEFAULT_TOP_K_RESULTS
@@ -235,10 +268,40 @@ class JournalMatcher:
         try:
             start_time = time.time()
             
-            # Generate embedding for query
-            logger.debug(f"Generating embedding for query (length: {len(query_text)})")
-            query_embedding = embed_text(query_text)
-            query_embedding = self._normalize_embeddings(query_embedding.reshape(1, -1))[0]
+            # Perform multi-modal analysis if requested
+            multimodal_analysis = None
+            query_embedding = None
+            
+            if use_multimodal_analysis:
+                logger.debug("Performing multi-modal content analysis")
+                multimodal_analysis = self.multimodal_analyzer.analyze_content(
+                    query_text, 
+                    include_study_classification=include_study_classification
+                )
+                
+                # Use combined embedding from multi-modal analysis
+                query_embedding = multimodal_analysis.combined_embedding
+                study_classification = multimodal_analysis.study_classification
+                
+                if study_classification:
+                    logger.info(f"Multi-modal analysis - Detected study type: {study_classification.primary_type.value} "
+                               f"(confidence: {study_classification.confidence:.3f})")
+                
+                logger.info(f"Multi-modal analysis completed - Quality score: {multimodal_analysis.content_quality_score:.3f}")
+                
+            else:
+                # Fallback to simple embedding generation
+                study_classification = None
+                if include_study_classification:
+                    logger.debug("Classifying manuscript study type")
+                    study_classification = self.study_classifier.classify_study_type(query_text)
+                    logger.info(f"Detected study type: {study_classification.primary_type.value} "
+                               f"(confidence: {study_classification.confidence:.3f})")
+                
+                # Generate embedding for query
+                logger.debug(f"Generating embedding for query (length: {len(query_text)})")
+                query_embedding = embed_text(query_text)
+                query_embedding = self._normalize_embeddings(query_embedding.reshape(1, -1))[0]
             
             # Perform similarity search
             logger.debug(f"Searching for top {top_k} similar journals")
@@ -264,6 +327,19 @@ class JournalMatcher:
                 journal['similarity_score'] = float(similarity)
                 journal['rank'] = i + 1
                 
+                # Add multi-modal analysis information
+                if multimodal_analysis:
+                    journal['content_quality_score'] = multimodal_analysis.content_quality_score
+                    journal['content_fingerprint'] = multimodal_analysis.content_fingerprint
+                    journal['analyzed_sections'] = list(multimodal_analysis.sections.keys())
+                    journal['section_count'] = len(multimodal_analysis.sections)
+                
+                # Add study type classification information
+                if study_classification:
+                    journal['manuscript_study_type'] = study_classification.primary_type.value
+                    journal['study_type_confidence'] = study_classification.confidence
+                    journal['methodology_keywords'] = study_classification.methodology_keywords
+                
                 results.append(journal)
             
             # Apply additional filters
@@ -276,6 +352,55 @@ class JournalMatcher:
             
             search_time = time.time() - start_time
             logger.info(f"Found {len(results)} matching journals in {search_time:.3f}s")
+            
+            # Add analysis summary to results if available
+            if (study_classification or multimodal_analysis) and results:
+                # Add analysis summary as metadata (don't modify individual results)
+                for result in results:
+                    if 'search_metadata' not in result:
+                        result['search_metadata'] = {}
+                    
+                    # Add study classification metadata
+                    if study_classification:
+                        result['search_metadata']['study_classification'] = {
+                            'primary_type': study_classification.primary_type.value,
+                            'confidence': study_classification.confidence,
+                            'secondary_types': [(t.value, c) for t, c in study_classification.secondary_types[:3]]
+                        }
+                    
+                    # Add multi-modal analysis metadata
+                    if multimodal_analysis:
+                        result['search_metadata']['multimodal_analysis'] = {
+                            'content_quality_score': multimodal_analysis.content_quality_score,
+                            'sections_analyzed': [s.value for s in multimodal_analysis.sections.keys()],
+                            'content_fingerprint': multimodal_analysis.content_fingerprint,
+                            'total_sections': len(multimodal_analysis.sections)
+                        }
+            
+            # Add journal ranking analysis if requested and available
+            if include_ranking_analysis and self.ranking_integrator and results:
+                try:
+                    logger.info("Integrating journal ranking analysis")
+                    results = integrate_journal_rankings(results, query_text)
+                    
+                    # Add ranking metadata to search metadata
+                    manuscript_analysis = self.ranking_integrator.analyze_manuscript_for_ranking(query_text)
+                    
+                    for result in results:
+                        if 'search_metadata' not in result:
+                            result['search_metadata'] = {}
+                        
+                        result['search_metadata']['ranking_analysis'] = {
+                            'manuscript_prestige_level': manuscript_analysis.target_prestige_level.value,
+                            'manuscript_quality_score': manuscript_analysis.quality_alignment_score,
+                            'recommended_ranking_range': manuscript_analysis.recommended_ranking_range,
+                            'ranking_explanation': manuscript_analysis.ranking_explanation
+                        }
+                    
+                    logger.info("Journal ranking analysis integrated successfully")
+                    
+                except Exception as e:
+                    logger.warning(f"Failed to integrate ranking analysis: {e}")
             
             return results
             
@@ -446,6 +571,77 @@ class JournalMatcher:
             })
         
         return stats
+    
+    def _ensemble_search(self, query_text: str, top_k: int, 
+                        min_similarity: float, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """
+        Perform ensemble search using multiple matching methods.
+        
+        Args:
+            query_text: Query text
+            top_k: Number of results to return
+            min_similarity: Minimum similarity threshold
+            filters: Optional filters
+            
+        Returns:
+            List of matching journals with ensemble scores
+        """
+        try:
+            # Import here to avoid circular imports
+            from .ensemble_matcher import EnsembleJournalMatcher
+            
+            # Create ensemble matcher (reuse existing journal data)
+            ensemble_matcher = EnsembleJournalMatcher()
+            ensemble_matcher.journal_matcher = self  # Reuse loaded data
+            
+            # Set defaults
+            if top_k is None:
+                top_k = DEFAULT_TOP_K_RESULTS
+            if min_similarity is None:
+                min_similarity = MIN_SIMILARITY_THRESHOLD
+            
+            # Perform ensemble matching
+            ensemble_results = ensemble_matcher.find_matching_journals(
+                query_text=query_text,
+                top_k=top_k,
+                min_confidence=min_similarity,
+                filters=filters
+            )
+            
+            # Convert ensemble results to standard format
+            results = []
+            for ensemble_result in ensemble_results:
+                journal = ensemble_result.journal_data.copy()
+                journal['similarity_score'] = ensemble_result.ensemble_score
+                journal['rank'] = ensemble_result.rank
+                journal['ensemble_confidence'] = ensemble_result.confidence
+                journal['ensemble_explanation'] = ensemble_result.explanation
+                journal['individual_method_scores'] = {
+                    method.value: score for method, score in ensemble_result.individual_scores.items()
+                }
+                
+                # Add ensemble metadata
+                if 'search_metadata' not in journal:
+                    journal['search_metadata'] = {}
+                journal['search_metadata']['ensemble_matching'] = {
+                    'ensemble_score': ensemble_result.ensemble_score,
+                    'confidence': ensemble_result.confidence,
+                    'explanation': ensemble_result.explanation,
+                    'methods_used': list(ensemble_result.individual_scores.keys()),
+                    'method_count': len(ensemble_result.individual_scores)
+                }
+                
+                results.append(journal)
+            
+            logger.info(f"Ensemble search completed: {len(results)} results")
+            return results
+            
+        except ImportError as e:
+            logger.error(f"Ensemble matching not available: {e}")
+            raise MatchingError("Ensemble matching failed - missing dependencies")
+        except Exception as e:
+            logger.error(f"Ensemble search failed: {e}")
+            raise MatchingError(f"Ensemble search failed: {e}")
 
 
 def create_faiss_index(embeddings: np.ndarray) -> faiss.Index:

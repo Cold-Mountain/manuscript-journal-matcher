@@ -24,12 +24,14 @@ try:
     from src.embedder import embed_text, cosine_similarity_single, get_embedding_info, EmbeddingError
     from src.match_journals import JournalMatcher, MatchingError, format_search_results
     from src.journal_db_builder import load_journal_database
+    from src.study_classifier import get_study_type_display_name, StudyType
 except ImportError:
     # Fallback to direct imports
     from extractor import extract_manuscript_data, validate_extracted_data, ExtractionError
     from embedder import embed_text, cosine_similarity_single, get_embedding_info, EmbeddingError
     from match_journals import JournalMatcher, MatchingError, format_search_results
     from journal_db_builder import load_journal_database
+    from study_classifier import get_study_type_display_name, StudyType
 
 st.set_page_config(
     page_title="Manuscript Journal Matcher",
@@ -351,6 +353,16 @@ def find_matching_journals(abstract_text):
         with col2:
             min_similarity = st.slider("Min similarity", 0.0, 1.0, 0.0, 0.1)
         
+        # Matching method options
+        st.subheader("🧠 Matching Methods")
+        col_methods1, col_methods2 = st.columns(2)
+        with col_methods1:
+            use_multimodal = st.checkbox("Multi-modal Analysis", value=True, 
+                                       help="Analyze different sections of manuscript separately")
+        with col_methods2:
+            use_ensemble = st.checkbox("Ensemble Matching", value=False,
+                                     help="Combine multiple matching strategies for better accuracy")
+        
         # Enhanced filtering options
         st.subheader("🔍 Filter Options")
         
@@ -478,11 +490,107 @@ def find_matching_journals(abstract_text):
                 query_text=abstract_text,
                 top_k=top_k,
                 min_similarity=min_similarity,
-                filters=filters if filters else None
+                filters=filters if filters else None,
+                include_study_classification=True,
+                use_multimodal_analysis=use_multimodal,
+                use_ensemble_matching=use_ensemble,
+                include_ranking_analysis=True
             )
         
         if results:
             st.success(f"✅ Found {len(results)} matching journals")
+            
+            # Display analysis results if available
+            if results and 'search_metadata' in results[0]:
+                metadata = results[0]['search_metadata']
+                
+                # Display ensemble matching info
+                ensemble_info = metadata.get('ensemble_matching')
+                if ensemble_info:
+                    col_ensemble, col_methods = st.columns([2, 2])
+                    with col_ensemble:
+                        ensemble_score = ensemble_info['ensemble_score']
+                        confidence = ensemble_info['confidence']
+                        if ensemble_score >= 0.8:
+                            st.success(f"🎯 **Ensemble Score**: {ensemble_score:.1%}")
+                        elif ensemble_score >= 0.6:
+                            st.warning(f"🎯 **Ensemble Score**: {ensemble_score:.1%}")
+                        else:
+                            st.error(f"🎯 **Ensemble Score**: {ensemble_score:.1%}")
+                    
+                    with col_methods:
+                        method_count = ensemble_info['method_count']
+                        st.info(f"🔧 **Methods Used**: {method_count} matching strategies")
+                    
+                    # Show explanation
+                    if ensemble_info.get('explanation'):
+                        st.caption(f"💡 {ensemble_info['explanation']}")
+                
+                # Display multi-modal analysis info
+                multimodal_info = metadata.get('multimodal_analysis')
+                if multimodal_info:
+                    col_quality, col_sections = st.columns([2, 2])
+                    with col_quality:
+                        quality_score = multimodal_info['content_quality_score']
+                        if quality_score >= 0.8:
+                            st.success(f"📊 **Content Quality**: {quality_score:.1%}")
+                        elif quality_score >= 0.6:
+                            st.warning(f"📊 **Content Quality**: {quality_score:.1%}")
+                        else:
+                            st.error(f"📊 **Content Quality**: {quality_score:.1%}")
+                    
+                    with col_sections:
+                        sections_analyzed = multimodal_info['sections_analyzed']
+                        total_sections = multimodal_info['total_sections']
+                        st.info(f"📋 **Sections Analyzed**: {total_sections} ({', '.join(sections_analyzed[:3])}{'...' if len(sections_analyzed) > 3 else ''})")
+                
+                # Display study type classification if available  
+                study_info = metadata.get('study_classification')
+                if study_info:
+                    study_type_name = get_study_type_display_name(StudyType(study_info['primary_type']))
+                    confidence = study_info['confidence']
+                    
+                    col_study, col_conf = st.columns([3, 1])
+                    with col_study:
+                        st.info(f"🔬 **Detected Study Type**: {study_type_name}")
+                    with col_conf:
+                        if confidence >= 0.7:
+                            st.success(f"Confidence: {confidence:.1%}")
+                        elif confidence >= 0.5:
+                            st.warning(f"Confidence: {confidence:.1%}")
+                        else:
+                            st.error(f"Confidence: {confidence:.1%}")
+                    
+                    # Show secondary types if available
+                    if study_info.get('secondary_types'):
+                        secondary_types = [get_study_type_display_name(StudyType(t)) for t, c in study_info['secondary_types']]
+                        st.caption(f"Secondary types: {', '.join(secondary_types[:2])}")
+                
+                # Display ranking analysis if available
+                ranking_info = metadata.get('ranking_analysis')
+                if ranking_info:
+                    col_prestige, col_quality = st.columns([2, 2])
+                    with col_prestige:
+                        prestige_level = ranking_info['manuscript_prestige_level']
+                        prestige_emoji = {
+                            'elite': '🏆', 'premier': '🥇', 'excellent': '🥈',
+                            'good': '🥉', 'average': '📊', 'emerging': '🌱'
+                        }.get(prestige_level, '📊')
+                        st.info(f"{prestige_emoji} **Target Prestige**: {prestige_level.title()}")
+                    
+                    with col_quality:
+                        quality_score = ranking_info['manuscript_quality_score']
+                        if quality_score >= 0.8:
+                            st.success(f"📈 **Quality Score**: {quality_score:.1%}")
+                        elif quality_score >= 0.6:
+                            st.warning(f"📈 **Quality Score**: {quality_score:.1%}")
+                        else:
+                            st.error(f"📈 **Quality Score**: {quality_score:.1%}")
+                    
+                    # Show ranking range and explanation
+                    min_rank, max_rank = ranking_info['recommended_ranking_range']
+                    st.caption(f"🎯 Recommended journal ranking: #{min_rank}-{max_rank}")
+                    st.caption(f"💡 {ranking_info['ranking_explanation']}")
             
             # Format results for display
             formatted_results = format_search_results(results)
@@ -604,6 +712,25 @@ def find_matching_journals(abstract_text):
                             if result.get('license_type'):
                                 licenses = ', '.join(result['license_type'])
                                 st.write(f"**License Types:** {licenses}")
+                            
+                            # Ensemble method scores if available
+                            if 'individual_method_scores' in result:
+                                st.write("**🎯 Ensemble Method Scores:**")
+                                method_scores = result['individual_method_scores']
+                                for method, score in sorted(method_scores.items(), key=lambda x: x[1], reverse=True)[:5]:
+                                    method_display = method.replace('_', ' ').title()
+                                    # Add icons for different methods
+                                    if 'citation' in method:
+                                        icon = "📚"
+                                    elif 'semantic' in method:
+                                        icon = "🧠"
+                                    elif 'multimodal' in method:
+                                        icon = "📊"
+                                    elif 'study_type' in method:
+                                        icon = "🔬"
+                                    else:
+                                        icon = "•"
+                                    st.write(f"  {icon} {method_display}: {score:.3f}")
                         
                         with detail_col2:
                             # Additional DOAJ info
@@ -615,6 +742,38 @@ def find_matching_journals(abstract_text):
                                 st.write("💚 **No Article Processing Charges**")
                             elif result.get('apc_amount') and result.get('apc_currency'):
                                 st.write(f"💰 **APC:** {result['apc_amount']} {result['apc_currency']}")
+                            
+                            # Ensemble explanation if available
+                            if 'ensemble_explanation' in result:
+                                st.write(f"**💡 Match Explanation:**")
+                                st.write(f"  {result['ensemble_explanation']}")
+                            
+                            # Ensemble confidence if available
+                            if 'ensemble_confidence' in result:
+                                confidence = result['ensemble_confidence']
+                                confidence_color = "🟢" if confidence >= 0.7 else "🟡" if confidence >= 0.5 else "🔴"
+                                st.write(f"**{confidence_color} Ensemble Confidence:** {confidence:.1%}")
+                            
+                            # Journal ranking information if available
+                            if 'ranking_metrics' in result:
+                                ranking_data = result['ranking_metrics']
+                                st.write("**📊 Journal Ranking:**")
+                                
+                                prestige = ranking_data.get('prestige_level', 'unknown')
+                                prestige_emoji = {
+                                    'elite': '🏆', 'premier': '🥇', 'excellent': '🥈',
+                                    'good': '🥉', 'average': '📊', 'emerging': '🌱'
+                                }.get(prestige, '📊')
+                                st.write(f"  {prestige_emoji} Prestige: {prestige.title()}")
+                                
+                                quality_score = ranking_data.get('quality_score', 0)
+                                quality_color = "🟢" if quality_score >= 0.7 else "🟡" if quality_score >= 0.5 else "🔴"
+                                st.write(f"  {quality_color} Quality Score: {quality_score:.3f}")
+                                
+                                if 'manuscript_compatibility' in result:
+                                    compatibility = result['manuscript_compatibility']
+                                    comp_color = "🟢" if compatibility >= 0.7 else "🟡" if compatibility >= 0.5 else "🔴"
+                                    st.write(f"  {comp_color} MS Compatibility: {compatibility:.3f}")
                     
                     # Action buttons
                     if result['homepage_url']:
