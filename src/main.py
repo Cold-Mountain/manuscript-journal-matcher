@@ -25,6 +25,11 @@ try:
     from src.match_journals import JournalMatcher, MatchingError, format_search_results
     from src.journal_db_builder import load_journal_database
     from src.study_classifier import get_study_type_display_name, StudyType
+    from src.recommendation_engine import (
+        AdvancedRecommendationEngine, FilterCriteria, RecommendationStrategy,
+        create_recommendation_filters, analyze_recommendation_suite
+    )
+    from src.journal_ranker import PrestigeLevel
 except ImportError:
     # Fallback to direct imports
     from extractor import extract_manuscript_data, validate_extracted_data, ExtractionError
@@ -32,6 +37,11 @@ except ImportError:
     from match_journals import JournalMatcher, MatchingError, format_search_results
     from journal_db_builder import load_journal_database
     from study_classifier import get_study_type_display_name, StudyType
+    from recommendation_engine import (
+        AdvancedRecommendationEngine, FilterCriteria, RecommendationStrategy,
+        create_recommendation_filters, analyze_recommendation_suite
+    )
+    from journal_ranker import PrestigeLevel
 
 st.set_page_config(
     page_title="Manuscript Journal Matcher",
@@ -47,6 +57,8 @@ def main():
     # Initialize session state
     if 'matcher' not in st.session_state:
         st.session_state.matcher = None
+    if 'recommendation_engine' not in st.session_state:
+        st.session_state.recommendation_engine = None
     
     # Sidebar with system info
     with st.sidebar:
@@ -69,7 +81,7 @@ def main():
         st.markdown("✅ Results ranking & filtering")
     
     # Main interface tabs
-    tab1, tab2, tab3 = st.tabs(["📄 Upload Manuscript", "🧪 Quick Test", "📊 Database Info"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📄 Upload Manuscript", "🧪 Quick Test", "🎯 Smart Recommendations", "📊 Database Info"])
     
     with tab1:
         st.markdown("Upload a PDF or DOCX file to find matching journals")
@@ -112,6 +124,9 @@ def main():
             find_matching_journals(abstract_text)
     
     with tab3:
+        smart_recommendations_interface()
+    
+    with tab4:
         display_database_info()
 
 
@@ -799,6 +814,291 @@ def find_matching_journals(abstract_text):
     except Exception as e:
         st.error(f"❌ Unexpected error: {e}")
         st.code(traceback.format_exc())
+
+
+def smart_recommendations_interface():
+    """Smart recommendations interface with advanced filtering."""
+    st.header("🎯 Smart Recommendations")
+    st.markdown("Get personalized journal recommendations with advanced filtering and AI-powered analysis")
+    
+    # Initialize recommendation engine
+    if st.session_state.recommendation_engine is None:
+        with st.spinner("Initializing recommendation engine..."):
+            try:
+                st.session_state.recommendation_engine = AdvancedRecommendationEngine()
+                st.success("✅ Recommendation engine initialized!")
+            except Exception as e:
+                st.error(f"❌ Failed to initialize recommendation engine: {e}")
+                return
+    
+    # Input area
+    st.subheader("📝 Manuscript Input")
+    
+    # Sample manuscripts for testing
+    sample_manuscripts = {
+        "High-Impact Clinical Study": """
+            Efficacy of AI-Guided Precision Medicine in Advanced Cancer Treatment:
+            A Large-Scale, Multi-Center, Randomized Controlled Trial
+            
+            Background: Precision medicine approaches in oncology show promise but lack comprehensive AI integration. 
+            This international, multi-center randomized controlled trial evaluated AI-guided treatment selection 
+            versus standard care in 2,847 patients with stage III-IV solid tumors across 47 centers in 12 countries.
+            
+            Methods: Patients were randomly assigned (1:1) to AI-guided precision therapy (n=1,424) or 
+            physician-guided standard care (n=1,423). The AI system analyzed genomic, proteomic, and clinical 
+            data using deep learning algorithms. Primary endpoint was overall survival at 24 months.
+            
+            Results: AI-guided therapy demonstrated significant improvement in overall survival (HR=0.67, 95% CI: 
+            0.58-0.78, p<0.001). Median overall survival was 18.3 months (95% CI: 16.8-19.9) in the AI group 
+            versus 13.2 months (95% CI: 11.7-14.8) in the control group.
+            
+            Conclusions: AI-guided precision medicine significantly improves survival outcomes in advanced cancer 
+            patients, representing a paradigm shift in oncology treatment selection with immediate clinical implications.
+        """,
+        "Machine Learning Research": """
+            Machine Learning Approaches for Biomarker Discovery in Type 2 Diabetes
+            
+            Background: Type 2 diabetes biomarker identification remains challenging. We developed machine learning 
+            models to identify novel biomarkers from metabolomic data.
+            
+            Methods: We analyzed plasma samples from 485 type 2 diabetes patients and 312 healthy controls using 
+            untargeted metabolomics. Random forest and support vector machine algorithms were applied for biomarker 
+            discovery with 80/20 train-test splits.
+            
+            Results: Our models achieved 87% accuracy in diabetes classification. We identified 15 potential 
+            biomarkers with area under curve >0.80. Three metabolites showed significant correlation with HbA1c 
+            levels (r>0.65, p<0.01).
+            
+            Conclusions: Machine learning enables effective biomarker discovery from metabolomic data. These findings 
+            warrant validation in larger cohorts for clinical translation.
+        """,
+        "Custom": ""
+    }
+    
+    selected_manuscript = st.selectbox("Choose sample manuscript or enter custom:", list(sample_manuscripts.keys()))
+    
+    if selected_manuscript == "Custom":
+        manuscript_text = st.text_area("Enter your manuscript text (abstract or full text):", height=200)
+    else:
+        manuscript_text = sample_manuscripts[selected_manuscript]
+        st.text_area("Manuscript:", value=manuscript_text, height=200, disabled=True)
+    
+    # Strategy and filter configuration
+    st.subheader("⚙️ Recommendation Configuration")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("**Recommendation Strategy:**")
+        strategy = st.selectbox(
+            "Choose strategy:",
+            [
+                RecommendationStrategy.BALANCED,
+                RecommendationStrategy.CONSERVATIVE,
+                RecommendationStrategy.AMBITIOUS,
+                RecommendationStrategy.COST_CONSCIOUS,
+                RecommendationStrategy.OPEN_ACCESS
+            ],
+            format_func=lambda x: x.value.replace('_', ' ').title(),
+            help="Different strategies prioritize different factors in recommendations"
+        )
+        
+        max_recommendations = st.slider("Max recommendations per category:", 1, 10, 5)
+    
+    with col2:
+        st.markdown("**Advanced Filters:**")
+        
+        # Prestige filters
+        min_prestige = st.selectbox(
+            "Minimum prestige level:",
+            [None] + list(PrestigeLevel),
+            format_func=lambda x: "Any" if x is None else x.value.title(),
+            help="Filter journals by minimum prestige level"
+        )
+        
+        # Cost filters
+        cost_filter = st.selectbox(
+            "Cost preference:",
+            ["Any", "Free only", "Under $1000", "Under $2000", "Under $3000"],
+            help="Filter by publication costs"
+        )
+        
+        # Access filters
+        access_filter = st.selectbox(
+            "Access preference:",
+            ["Any", "Open Access only", "DOAJ listed only"],
+            help="Filter by journal access type"
+        )
+    
+    # Create filter criteria
+    filter_criteria = FilterCriteria()
+    
+    if min_prestige:
+        filter_criteria.min_prestige_level = min_prestige
+    
+    if cost_filter == "Free only":
+        filter_criteria.no_apc_only = True
+    elif cost_filter == "Under $1000":
+        filter_criteria.max_apc = 1000
+    elif cost_filter == "Under $2000":
+        filter_criteria.max_apc = 2000
+    elif cost_filter == "Under $3000":
+        filter_criteria.max_apc = 3000
+    
+    if access_filter == "Open Access only":
+        filter_criteria.open_access_only = True
+    elif access_filter == "DOAJ listed only":
+        filter_criteria.doaj_only = True
+    
+    # Generate recommendations button
+    if manuscript_text and st.button("🎯 Generate Smart Recommendations", type="primary"):
+        with st.spinner("Generating personalized recommendations..."):
+            try:
+                # Generate recommendations
+                suite = st.session_state.recommendation_engine.generate_recommendations(
+                    manuscript_text=manuscript_text,
+                    filter_criteria=filter_criteria,
+                    strategy=strategy,
+                    max_recommendations=max_recommendations
+                )
+                
+                # Display recommendation suite
+                display_recommendation_suite(suite)
+                
+            except Exception as e:
+                st.error(f"❌ Failed to generate recommendations: {e}")
+                st.code(traceback.format_exc())
+
+
+def display_recommendation_suite(suite):
+    """Display the complete recommendation suite."""
+    st.success("✅ Smart recommendations generated!")
+    
+    # Summary metrics
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Strategy", suite.recommendation_strategy.value.title())
+    with col2:
+        st.metric("Journals Considered", suite.total_journals_considered)
+    with col3:
+        total_recs = (len(suite.primary_recommendations) + len(suite.alternative_recommendations) + 
+                     len(suite.aspirational_recommendations) + len(suite.cost_effective_recommendations) +
+                     len(suite.open_access_recommendations))
+        st.metric("Total Recommendations", total_recs)
+    with col4:
+        manuscript_summary = suite.manuscript_analysis_summary
+        target_prestige = manuscript_summary.get('target_prestige', 'Unknown')
+        st.metric("Target Prestige", target_prestige.title())
+    
+    # Manuscript analysis summary
+    with st.expander("📊 Manuscript Analysis Summary"):
+        col1, col2 = st.columns(2)
+        with col1:
+            st.write(f"**Word Count:** {manuscript_summary.get('word_count', 'Unknown')}")
+            st.write(f"**Study Type:** {manuscript_summary.get('study_type', 'Unknown')}")
+            st.write(f"**Quality Score:** {manuscript_summary.get('quality_score', 'Unknown')}")
+        with col2:
+            st.write(f"**References Found:** {manuscript_summary.get('references_found', 'Unknown')}")
+            st.write(f"**Unique Journals:** {manuscript_summary.get('unique_journals', 'Unknown')}")
+            st.write(f"**Content Quality:** {manuscript_summary.get('content_quality_avg', 'Unknown')}")
+    
+    # Recommendation categories
+    categories = [
+        ("🏆 Primary Recommendations", suite.primary_recommendations, "Best overall matches based on your strategy"),
+        ("🔄 Alternative Options", suite.alternative_recommendations, "Good alternatives worth considering"), 
+        ("🚀 Aspirational Targets", suite.aspirational_recommendations, "High-prestige journals to aim for"),
+        ("💰 Cost-Effective Options", suite.cost_effective_recommendations, "Budget-friendly publication options"),
+        ("🔓 Open Access Options", suite.open_access_recommendations, "Open access publication venues")
+    ]
+    
+    for category_name, recommendations, description in categories:
+        if recommendations:
+            st.subheader(category_name)
+            st.markdown(f"*{description}*")
+            
+            for i, rec in enumerate(recommendations, 1):
+                display_smart_recommendation(rec, i)
+            
+            st.markdown("---")
+
+
+def display_smart_recommendation(rec, rank):
+    """Display a single smart recommendation."""
+    journal_data = rec.journal_data
+    name = journal_data.get('display_name', 'Unknown')
+    
+    with st.container():
+        # Header with key metrics
+        col_title, col_score, col_confidence = st.columns([2, 1, 1])
+        with col_title:
+            st.markdown(f"### {rank}. {name}")
+        with col_score:
+            score_color = "🟢" if rec.recommendation_score >= 0.7 else "🟡" if rec.recommendation_score >= 0.5 else "🔴"
+            st.metric("Rec. Score", f"{score_color} {rec.recommendation_score:.3f}")
+        with col_confidence:
+            conf_color = "🟢" if rec.confidence >= 0.7 else "🟡" if rec.confidence >= 0.5 else "🔴"
+            st.metric("Confidence", f"{conf_color} {rec.confidence:.3f}")
+        
+        # Key metrics row
+        col1, col2, col3, col4, col5 = st.columns(5)
+        with col1:
+            acceptance_color = "🟢" if rec.estimated_acceptance_probability >= 0.6 else "🟡" if rec.estimated_acceptance_probability >= 0.4 else "🔴"
+            st.metric("Est. Acceptance", f"{acceptance_color} {rec.estimated_acceptance_probability:.1%}")
+        with col2:
+            ranking_data = journal_data.get('ranking_metrics', {})
+            prestige = ranking_data.get('prestige_level', 'unknown')
+            prestige_emoji = {
+                'elite': '🏆', 'premier': '🥇', 'excellent': '🥈',
+                'good': '🥉', 'average': '📊', 'emerging': '🌱'
+            }.get(prestige, '📊')
+            st.metric("Prestige", f"{prestige_emoji} {prestige.title()}")
+        with col3:
+            cost_analysis = rec.cost_analysis
+            cost_note = cost_analysis.get('cost_note', 'Unknown')
+            if 'free' in cost_note.lower():
+                cost_display = "💚 Free"
+            elif 'low' in cost_note.lower():
+                cost_display = "💛 Low"
+            elif 'high' in cost_note.lower():
+                cost_display = "🔴 High"
+            else:
+                cost_display = "💰 Paid"
+            st.metric("Cost", cost_display)
+        with col4:
+            if rec.estimated_time_to_publication:
+                days = rec.estimated_time_to_publication
+                if days <= 90:
+                    time_display = f"⚡ {days}d"
+                elif days <= 180:
+                    time_display = f"⏱️ {days}d"
+                else:
+                    time_display = f"⏳ {days}d"
+            else:
+                time_display = "❓ Unknown"
+            st.metric("Pub. Time", time_display)
+        with col5:
+            similarity = journal_data.get('similarity_score', 0)
+            sim_color = "🟢" if similarity >= 0.7 else "🟡" if similarity >= 0.5 else "🔴"
+            st.metric("Similarity", f"{sim_color} {similarity:.3f}")
+        
+        # Match explanation and reasons
+        st.markdown(f"**💡 Match:** {rec.match_explanation}")
+        
+        if rec.recommendation_reasons:
+            reasons_text = "• " + " • ".join(rec.recommendation_reasons[:3])
+            st.markdown(f"**✨ Reasons:** {reasons_text}")
+        
+        if rec.risk_factors:
+            risks_text = "• " + " • ".join(rec.risk_factors[:2])
+            st.markdown(f"**⚠️ Risks:** {risks_text}")
+        
+        # Action buttons
+        col_btn1, col_btn2 = st.columns([1, 3])
+        with col_btn1:
+            if journal_data.get('homepage_url'):
+                st.markdown(f"🔗 [Visit Journal]({journal_data['homepage_url']})")
+        
+        st.divider()
 
 
 def display_database_info():
