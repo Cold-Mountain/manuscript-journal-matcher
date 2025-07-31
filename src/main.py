@@ -54,30 +54,33 @@ st.set_page_config(
 def check_data_files():
     """Check if data files exist and show instructions if not."""
     data_dir = Path("data")
-    required_files = ["journal_metadata.json", "journal_embeddings.faiss"]
     
-    missing_files = []
-    for filename in required_files:
-        if not (data_dir / filename).exists():
-            missing_files.append(filename)
+    # Check for full dataset first
+    full_files = ["journal_metadata.json", "journal_embeddings.faiss"]
+    mini_files = ["mini_journal_metadata.json", "mini_journal_embeddings.faiss"]
     
-    if missing_files:
-        st.error("❌ Missing required data files for deployment")
-        st.markdown("**Required files not found:**")
-        for file in missing_files:
-            st.markdown(f"- `data/{file}`")
+    has_full = all((data_dir / f).exists() for f in full_files)
+    has_mini = all((data_dir / f).exists() for f in mini_files)
+    
+    if has_full:
+        st.success("✅ Full dataset available (7,648 journals)")
+        return "full"
+    elif has_mini:
+        st.info("ℹ️ Using mini demo dataset (50 top journals)")
+        st.markdown("*Full dataset not available - using demo for Streamlit Cloud deployment*")
+        return "mini"
+    else:
+        st.error("❌ No dataset available")
+        st.markdown("**Missing files:**")
+        st.markdown("- Full dataset: `journal_metadata.json`, `journal_embeddings.faiss`")
+        st.markdown("- Mini dataset: `mini_journal_metadata.json`, `mini_journal_embeddings.faiss`")
         
         st.markdown("""
         **For Streamlit Cloud deployment:**
-        1. The data files are too large for GitHub (>100MB)
-        2. Consider using Git LFS or alternative hosting
-        3. Or use a smaller subset of journal data for demo
-        
-        **Alternative:** Run locally where data files exist
+        The full dataset files are too large for GitHub (>100MB).
+        A mini demo dataset should be available for basic functionality.
         """)
         return False
-    
-    return True
 
 def main():
     """Main Streamlit application."""
@@ -348,14 +351,25 @@ def demo_analysis():
 def initialize_system():
     """Initialize the journal matching system."""
     try:
-        # First check if data files exist
-        if not check_data_files():
+        # Check which dataset is available
+        dataset_type = check_data_files()
+        if not dataset_type:
             return
             
         with st.spinner("Initializing journal matcher..."):
             matcher = JournalMatcher()
-            matcher.load_database()
+            if dataset_type == "mini":
+                # Load mini dataset
+                matcher.load_database(
+                    metadata_path="data/mini_journal_metadata.json",
+                    faiss_path="data/mini_journal_embeddings.faiss"
+                )
+            else:
+                # Load full dataset
+                matcher.load_database()
+            
             st.session_state.matcher = matcher
+            st.session_state.dataset_type = dataset_type
             st.success("✅ System initialized successfully!")
     except Exception as e:
         st.error(f"❌ System initialization failed: {e}")

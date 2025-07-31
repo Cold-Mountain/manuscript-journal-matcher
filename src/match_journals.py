@@ -89,12 +89,14 @@ class JournalMatcher:
         
         logger.info(f"Initialized JournalMatcher with index: {self.index_path}")
     
-    def load_database(self, force_reload: bool = False) -> None:
+    def load_database(self, force_reload: bool = False, metadata_path: str = None, faiss_path: str = None) -> None:
         """
         Load journal database and create/load FAISS index.
         
         Args:
             force_reload: Whether to force reload even if already loaded
+            metadata_path: Custom path to journal metadata JSON file
+            faiss_path: Custom path to FAISS index file
             
         Raises:
             MatchingError: If database loading fails
@@ -106,8 +108,15 @@ class JournalMatcher:
         try:
             logger.info("Loading journal database...")
             
-            # Load journal metadata and embeddings
-            self.journals, self.embeddings = load_journal_database()
+            # Use custom paths if provided
+            if metadata_path and faiss_path:
+                logger.info(f"Using custom paths: {metadata_path}, {faiss_path}")
+                self.journals, self.embeddings, self.faiss_index = self._load_custom_database_with_index(metadata_path, faiss_path)
+            else:
+                # Load journal metadata and embeddings using default paths
+                self.journals, self.embeddings = load_journal_database()
+                # Create or load FAISS index
+                self.faiss_index = self._create_or_load_faiss_index()
             
             if not self.journals:
                 raise MatchingError("No journals found in database")
@@ -120,9 +129,6 @@ class JournalMatcher:
             # Set embedding dimension
             self.embedding_dimension = self.embeddings.shape[1]
             logger.info(f"Embedding dimension: {self.embedding_dimension}")
-            
-            # Create or load FAISS index
-            self.faiss_index = self._create_or_load_faiss_index()
             
             # Initialize journal ranking integrator
             # TEMPORARILY DISABLED - causing issues
@@ -139,6 +145,33 @@ class JournalMatcher:
         except Exception as e:
             logger.error(f"Failed to load journal database: {e}")
             raise MatchingError(f"Database loading failed: {e}")
+    
+    def _load_custom_database_with_index(self, metadata_path: str, faiss_path: str) -> Tuple[List[Dict[str, Any]], Optional[np.ndarray], faiss.Index]:
+        """Load journal database from custom paths including FAISS index."""
+        import json
+        
+        # Load metadata
+        with open(metadata_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        # Handle different JSON formats
+        if isinstance(data, dict) and 'journals' in data:
+            journals = data['journals']
+        elif isinstance(data, list):
+            journals = data
+        else:
+            raise MatchingError(f"Invalid journal metadata format in {metadata_path}")
+        
+        # Load FAISS index
+        faiss_index = faiss.read_index(faiss_path)
+        
+        # Extract embeddings from FAISS index for compatibility
+        embeddings = np.array([faiss_index.reconstruct(i) for i in range(faiss_index.ntotal)])
+        
+        logger.info(f"Loaded {len(journals)} journals from {metadata_path}")
+        logger.info(f"Loaded FAISS index with {faiss_index.ntotal} vectors from {faiss_path}")
+        
+        return journals, embeddings, faiss_index
     
     def _create_or_load_faiss_index(self) -> faiss.Index:
         """
