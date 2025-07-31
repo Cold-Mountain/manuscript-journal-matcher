@@ -1,0 +1,2 @@
+data/journal_metadata.json filter=lfs diff=lfs merge=lfs -text
+data/journal_embeddings.faiss filter=lfs diff=lfs merge=lfs -text

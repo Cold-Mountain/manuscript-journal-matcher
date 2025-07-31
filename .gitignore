@@ -47,8 +47,8 @@ Thumbs.db
 
 # Project specific
 .env
-data/journal_metadata.json
-data/journal_embeddings.faiss
+# data/journal_metadata.json  # Now tracked by Git LFS
+# data/journal_embeddings.faiss  # Now tracked by Git LFS
 data/api_cache/
 *.log
 
