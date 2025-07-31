@@ -85,7 +85,7 @@ def check_data_files():
 def main():
     """Main Streamlit application."""
     st.title("📄 Manuscript Journal Matcher")
-    st.markdown("**Complete System** - Steps 2-5 Implemented")
+    st.markdown("**Heuristic Interface for Matching Abstracts to Notable Scholarly Homes Universally**")
     
     # Initialize session state
     if 'matcher' not in st.session_state:
