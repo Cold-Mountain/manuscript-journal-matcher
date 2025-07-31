@@ -14,6 +14,8 @@ from pathlib import Path
 import tempfile
 import traceback
 import pandas as pd
+import os
+import requests
 
 # Add src to path for imports
 sys.path.append(str(Path(__file__).parent))
@@ -48,6 +50,34 @@ st.set_page_config(
     page_icon="📄",
     layout="wide"
 )
+
+def check_data_files():
+    """Check if data files exist and show instructions if not."""
+    data_dir = Path("data")
+    required_files = ["journal_metadata.json", "journal_embeddings.faiss"]
+    
+    missing_files = []
+    for filename in required_files:
+        if not (data_dir / filename).exists():
+            missing_files.append(filename)
+    
+    if missing_files:
+        st.error("❌ Missing required data files for deployment")
+        st.markdown("**Required files not found:**")
+        for file in missing_files:
+            st.markdown(f"- `data/{file}`")
+        
+        st.markdown("""
+        **For Streamlit Cloud deployment:**
+        1. The data files are too large for GitHub (>100MB)
+        2. Consider using Git LFS or alternative hosting
+        3. Or use a smaller subset of journal data for demo
+        
+        **Alternative:** Run locally where data files exist
+        """)
+        return False
+    
+    return True
 
 def main():
     """Main Streamlit application."""
@@ -318,6 +348,10 @@ def demo_analysis():
 def initialize_system():
     """Initialize the journal matching system."""
     try:
+        # First check if data files exist
+        if not check_data_files():
+            return
+            
         with st.spinner("Initializing journal matcher..."):
             matcher = JournalMatcher()
             matcher.load_database()
