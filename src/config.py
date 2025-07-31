@@ -60,7 +60,7 @@ CROSSREF_BASE_URL = "https://api.crossref.org"
 
 # Search and matching parameters
 DEFAULT_TOP_K_RESULTS = int(os.getenv("MAX_RESULTS", "20"))
-MIN_SIMILARITY_THRESHOLD = float(os.getenv("MIN_SIMILARITY", "0.1"))
+MIN_SIMILARITY_THRESHOLD = float(os.getenv("MIN_SIMILARITY", "0.0"))  # Changed from 0.1 to 0.0
 CACHE_DURATION_HOURS = int(os.getenv("CACHE_DURATION_HOURS", "24"))
 
 # Text extraction patterns

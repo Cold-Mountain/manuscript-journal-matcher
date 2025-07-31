@@ -5,6 +5,10 @@ This module handles text embedding generation using sentence-transformers
 and provides utilities for similarity calculations and batch processing.
 """
 
+import os
+# Disable tokenizer parallelism to prevent multiprocessing issues
+os.environ['TOKENIZERS_PARALLELISM'] = 'false'
+
 import logging
 import numpy as np
 from typing import List, Union, Optional, Tuple
@@ -65,8 +69,15 @@ def initialize_embedding_model(model_name: Optional[str] = None) -> SentenceTran
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
         logger.info(f"Using device: {device}")
         
-        # Initialize the model
-        model = SentenceTransformer(model_name, device=device)
+        # Initialize the model with settings to avoid multiprocessing issues
+        model = SentenceTransformer(
+            model_name, 
+            device=device,
+            tokenizer_kwargs={
+                'clean_up_tokenization_spaces': False,
+                'use_fast': False  # Use slower but more stable tokenizer
+            }
+        )
         
         # Store model name for future reference
         model._model_name = model_name
@@ -390,3 +401,34 @@ def get_embedding_info() -> dict:
             'error': str(e),
             'loaded': False
         }
+
+
+def cleanup_model():
+    """
+    Clean up the global model instance to prevent resource leaks.
+    """
+    global _model_instance
+    if _model_instance is not None:
+        try:
+            # Move model to CPU to free GPU memory
+            if hasattr(_model_instance, 'to'):
+                _model_instance.to('cpu')
+            
+            # Clear CUDA cache if available
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            
+            # Force garbage collection
+            import gc
+            gc.collect()
+            
+            logger.debug("Cleaned up embedding model resources")
+        except Exception as e:
+            logger.warning(f"Error during model cleanup: {e}")
+        finally:
+            _model_instance = None
+
+
+import atexit
+# Register cleanup function to run when script exits
+atexit.register(cleanup_model)

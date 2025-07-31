@@ -78,8 +78,11 @@ class JournalMatcher:
         self.embedding_dimension: Optional[int] = None
         
         # Initialize study type classifier and multi-modal analyzer
-        self.study_classifier = StudyTypeClassifier()
-        self.multimodal_analyzer = MultiModalContentAnalyzer()
+        # TEMPORARILY DISABLED - causing deadlocks/hangs
+        # self.study_classifier = StudyTypeClassifier()
+        # self.multimodal_analyzer = MultiModalContentAnalyzer()
+        self.study_classifier = None
+        self.multimodal_analyzer = None
         
         # Initialize journal ranking integrator
         self.ranking_integrator = None
@@ -122,9 +125,11 @@ class JournalMatcher:
             self.faiss_index = self._create_or_load_faiss_index()
             
             # Initialize journal ranking integrator
+            # TEMPORARILY DISABLED - causing issues
             try:
-                self.ranking_integrator = JournalRankingIntegrator()
-                logger.info("Journal ranking integrator initialized")
+                # self.ranking_integrator = JournalRankingIntegrator()
+                self.ranking_integrator = None
+                logger.info("Journal ranking integrator disabled (temporary fix)")
             except Exception as e:
                 logger.warning(f"Failed to initialize ranking integrator: {e}")
                 self.ranking_integrator = None
@@ -229,7 +234,8 @@ class JournalMatcher:
                                include_study_classification: bool = True,
                                use_multimodal_analysis: bool = True,
                                use_ensemble_matching: bool = False,
-                               include_ranking_analysis: bool = True) -> List[Dict[str, Any]]:
+                               include_ranking_analysis: bool = True,
+                               bypass_mode: bool = False) -> List[Dict[str, Any]]:
         """
         Find journals most similar to the given query text with enhanced analysis options.
         
@@ -255,6 +261,10 @@ class JournalMatcher:
         # Load database if not already loaded
         self.load_database()
         
+        # Use bypass mode for simple, guaranteed-working search
+        if bypass_mode:
+            return self._bypass_search(query_text, top_k, min_similarity, filters)
+        
         # Use ensemble matching if requested
         if use_ensemble_matching:
             return self._ensemble_search(query_text, top_k, min_similarity, filters)
@@ -272,7 +282,7 @@ class JournalMatcher:
             multimodal_analysis = None
             query_embedding = None
             
-            if use_multimodal_analysis:
+            if use_multimodal_analysis and self.multimodal_analyzer:
                 logger.debug("Performing multi-modal content analysis")
                 multimodal_analysis = self.multimodal_analyzer.analyze_content(
                     query_text, 
@@ -292,16 +302,28 @@ class JournalMatcher:
             else:
                 # Fallback to simple embedding generation
                 study_classification = None
-                if include_study_classification:
-                    logger.debug("Classifying manuscript study type")
-                    study_classification = self.study_classifier.classify_study_type(query_text)
-                    logger.info(f"Detected study type: {study_classification.primary_type.value} "
-                               f"(confidence: {study_classification.confidence:.3f})")
+                # DISABLED - causing issues
+                # if include_study_classification and self.study_classifier:
+                #     logger.debug("Classifying manuscript study type")
+                #     study_classification = self.study_classifier.classify_study_type(query_text)
+                #     logger.info(f"Detected study type: {study_classification.primary_type.value} "
+                #                f"(confidence: {study_classification.confidence:.3f})")
                 
                 # Generate embedding for query
                 logger.debug(f"Generating embedding for query (length: {len(query_text)})")
                 query_embedding = embed_text(query_text)
-                query_embedding = self._normalize_embeddings(query_embedding.reshape(1, -1))[0]
+                
+                # Check if embedding is already normalized (it should be)
+                original_norm = np.linalg.norm(query_embedding)
+                logger.debug(f"Query embedding norm before normalization: {original_norm:.6f}")
+                
+                # Only normalize if not already normalized
+                if abs(original_norm - 1.0) > 0.001:
+                    logger.warning(f"Query embedding not normalized (norm={original_norm:.6f}), normalizing...")
+                    query_embedding = self._normalize_embeddings(query_embedding.reshape(1, -1))[0]
+                    logger.debug(f"Query embedding norm after normalization: {np.linalg.norm(query_embedding):.6f}")
+                else:
+                    logger.debug("Query embedding already normalized, no additional normalization needed")
             
             # Perform similarity search
             logger.debug(f"Searching for top {top_k} similar journals")
@@ -324,7 +346,22 @@ class JournalMatcher:
                     continue
                 
                 journal = self.journals[journal_idx].copy()
-                journal['similarity_score'] = float(similarity)
+                
+                # Handle FAISS similarity/distance values
+                # IndexFlatIP returns cosine similarities directly
+                # Other indices may return distances that need conversion
+                if isinstance(self.faiss_index, faiss.IndexFlatIP):
+                    # Direct cosine similarity from IndexFlatIP
+                    similarity_score = float(similarity)
+                    logger.info(f"Journal {journal_idx} ({journal.get('display_name', 'Unknown')[:30]}): similarity={similarity_score:.6f}")
+                else:
+                    # Legacy support for distance-based indices (IndexIVFFlat, etc.)
+                    # Convert distance to similarity: cosine_similarity = 1 - (squared_l2_distance / 2)
+                    raw_distance = float(similarity)
+                    similarity_score = max(0.0, 1.0 - (raw_distance / 2.0))
+                    logger.info(f"Distance-based index: distance={raw_distance:.6f} -> similarity={similarity_score:.6f}")
+                
+                journal['similarity_score'] = similarity_score
                 journal['rank'] = i + 1
                 
                 # Add multi-modal analysis information
@@ -348,6 +385,10 @@ class JournalMatcher:
             
             # Sort by similarity and limit results
             results = sorted(results, key=lambda x: x['similarity_score'], reverse=True)
+            
+            # Apply diversification to prevent specialty clustering
+            # TEMPORARILY DISABLED - may be causing issues
+            # results = self._diversify_results(results, max_same_specialty=max(1, top_k // 4))
             results = results[:top_k]
             
             search_time = time.time() - start_time
@@ -378,29 +419,33 @@ class JournalMatcher:
                         }
             
             # Add journal ranking analysis if requested and available
-            if include_ranking_analysis and self.ranking_integrator and results:
-                try:
-                    logger.info("Integrating journal ranking analysis")
-                    results = integrate_journal_rankings(results, query_text)
-                    
-                    # Add ranking metadata to search metadata
-                    manuscript_analysis = self.ranking_integrator.analyze_manuscript_for_ranking(query_text)
-                    
-                    for result in results:
-                        if 'search_metadata' not in result:
-                            result['search_metadata'] = {}
-                        
-                        result['search_metadata']['ranking_analysis'] = {
-                            'manuscript_prestige_level': manuscript_analysis.target_prestige_level.value,
-                            'manuscript_quality_score': manuscript_analysis.quality_alignment_score,
-                            'recommended_ranking_range': manuscript_analysis.recommended_ranking_range,
-                            'ranking_explanation': manuscript_analysis.ranking_explanation
-                        }
-                    
-                    logger.info("Journal ranking analysis integrated successfully")
-                    
-                except Exception as e:
-                    logger.warning(f"Failed to integrate ranking analysis: {e}")
+            # DISABLED - causing issues with result corruption
+            # if include_ranking_analysis and self.ranking_integrator and results:
+            #     try:
+            #         logger.info("Integrating journal ranking analysis")
+            #         
+            #         # TEMPORARY FIX: Skip the problematic integrate_journal_rankings function
+            #         # that might be reordering or corrupting results
+            #         # results = integrate_journal_rankings(results, query_text)
+            #         
+            #         # Add ranking metadata to search metadata
+            #         manuscript_analysis = self.ranking_integrator.analyze_manuscript_for_ranking(query_text)
+            #         
+            #         for result in results:
+            #             if 'search_metadata' not in result:
+            #                 result['search_metadata'] = {}
+            #             
+            #             result['search_metadata']['ranking_analysis'] = {
+            #                 'manuscript_prestige_level': manuscript_analysis.target_prestige_level.value,
+            #                 'manuscript_quality_score': manuscript_analysis.quality_alignment_score,
+            #                 'recommended_ranking_range': manuscript_analysis.recommended_ranking_range,
+            #                 'ranking_explanation': manuscript_analysis.ranking_explanation
+            #             }
+            #         
+            #         logger.info("Journal ranking analysis integrated successfully")
+            #         
+            #     except Exception as e:
+            #         logger.warning(f"Failed to integrate ranking analysis: {e}")
             
             return results
             
@@ -526,6 +571,67 @@ class JournalMatcher:
         logger.debug(f"Filtered {len(results)} results to {len(filtered_results)}")
         return filtered_results
     
+    def _diversify_results(self, results: List[Dict[str, Any]], 
+                          max_same_specialty: int = 2) -> List[Dict[str, Any]]:
+        """
+        Diversify search results to prevent clustering around one specialty.
+        
+        Args:
+            results: List of journal results sorted by similarity
+            max_same_specialty: Maximum number of journals from the same specialty
+            
+        Returns:
+            Diversified results list
+        """
+        if not results or max_same_specialty <= 0:
+            return results
+        
+        diversified = []
+        specialty_counts = {}
+        
+        # Define specialty keywords for classification
+        specialty_patterns = {
+            'pediatric': ['pediatric', 'paediatric', 'child', 'infant', 'neonatal', 'adolescent'],
+            'cardiology': ['cardio', 'heart', 'cardiac', 'vascular'],
+            'oncology': ['cancer', 'oncology', 'tumor', 'carcinoma'],
+            'neurology': ['neuro', 'brain', 'neural', 'cognitive'],
+            'radiology': ['radiology', 'imaging', 'radiologic'],
+            'surgery': ['surgery', 'surgical', 'operative'],
+            'psychiatry': ['psychiatry', 'psychiatric', 'mental health', 'psychology'],
+            'emergency': ['emergency', 'trauma', 'critical care', 'intensive'],
+            'internal': ['internal medicine', 'general medicine'],
+            'public_health': ['public health', 'epidemiology', 'population health']
+        }
+        
+        for result in results:
+            journal_name = result.get('display_name', '').lower()
+            
+            # Classify journal by specialty
+            journal_specialty = 'general'  # default
+            for specialty, keywords in specialty_patterns.items():
+                if any(keyword in journal_name for keyword in keywords):
+                    journal_specialty = specialty
+                    break
+            
+            # Check if we can add this journal (haven't exceeded specialty limit)
+            current_count = specialty_counts.get(journal_specialty, 0)
+            
+            if current_count < max_same_specialty:
+                diversified.append(result)
+                specialty_counts[journal_specialty] = current_count + 1
+                
+                # Add metadata about diversification
+                result['diversification_specialty'] = journal_specialty
+                result['specialty_rank_in_category'] = current_count + 1
+            else:
+                # Skip this journal to maintain diversity
+                logger.debug(f"Skipping {journal_name[:30]} (specialty '{journal_specialty}' limit reached)")
+        
+        logger.info(f"Diversified results: {len(results)} -> {len(diversified)} journals")
+        logger.debug(f"Specialty distribution: {specialty_counts}")
+        
+        return diversified
+    
     def get_database_stats(self) -> Dict[str, Any]:
         """
         Get statistics about the loaded journal database.
@@ -642,6 +748,73 @@ class JournalMatcher:
         except Exception as e:
             logger.error(f"Ensemble search failed: {e}")
             raise MatchingError(f"Ensemble search failed: {e}")
+    
+    def _bypass_search(self, query_text: str, top_k: int = None, 
+                      min_similarity: float = None, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """
+        Simple bypass search that replicates the working direct search logic.
+        
+        Args:
+            query_text: Query text
+            top_k: Number of results to return
+            min_similarity: Minimum similarity threshold
+            filters: Optional filters
+            
+        Returns:
+            List of matching journals with similarity scores
+        """
+        try:
+            # Set defaults
+            if top_k is None:
+                top_k = DEFAULT_TOP_K_RESULTS
+            if min_similarity is None:
+                min_similarity = MIN_SIMILARITY_THRESHOLD
+            
+            logger.info(f"🚀 BYPASS MODE: Performing simple search for {top_k} results")
+            
+            # Generate embedding directly (no multimodal or study classification)
+            query_embedding = embed_text(query_text)
+            logger.info(f"Generated embedding: norm={np.linalg.norm(query_embedding):.6f}")
+            
+            # Perform FAISS search
+            similarities, indices = self.faiss_index.search(
+                query_embedding.reshape(1, -1).astype(np.float32), 
+                top_k
+            )
+            
+            # Process results simply
+            results = []
+            for i, (similarity, journal_idx) in enumerate(zip(similarities[0], indices[0])):
+                if journal_idx == -1 or journal_idx >= len(self.journals):
+                    continue
+                
+                similarity_score = float(similarity)
+                
+                if similarity_score < min_similarity:
+                    continue
+                
+                journal = self.journals[journal_idx].copy()
+                journal['similarity_score'] = similarity_score
+                journal['rank'] = i + 1
+                
+                results.append(journal)
+                
+                logger.info(f"BYPASS: [{journal_idx}] {journal.get('display_name', 'Unknown')[:30]} | {similarity_score:.6f}")
+            
+            # Apply filters if provided
+            if filters:
+                results = self._apply_filters(results, filters)
+            
+            # Sort by similarity 
+            results = sorted(results, key=lambda x: x['similarity_score'], reverse=True)
+            
+            logger.info(f"✅ BYPASS MODE: Found {len(results)} results")
+            
+            return results[:top_k]
+            
+        except Exception as e:
+            logger.error(f"Bypass search failed: {e}")
+            raise MatchingError(f"Bypass search failed: {e}")
 
 
 def create_faiss_index(embeddings: np.ndarray) -> faiss.Index:
@@ -706,7 +879,16 @@ def search_similar_journals(query_embedding: np.ndarray,
             continue
         
         journal = journals[journal_idx].copy()
-        journal['similarity_score'] = float(similarity)
+        
+        # Handle FAISS similarity/distance values
+        if isinstance(index, faiss.IndexFlatIP):
+            # Direct cosine similarity from IndexFlatIP
+            similarity_score = float(similarity)
+        else:
+            # Convert distance to similarity for other index types
+            similarity_score = max(0.0, 1.0 - (float(similarity) / 2.0))
+        
+        journal['similarity_score'] = similarity_score
         journal['rank'] = i + 1
         
         results.append(journal)

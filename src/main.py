@@ -372,8 +372,8 @@ def find_matching_journals(abstract_text):
         st.subheader("🧠 Matching Methods")
         col_methods1, col_methods2 = st.columns(2)
         with col_methods1:
-            use_multimodal = st.checkbox("Multi-modal Analysis", value=True, 
-                                       help="Analyze different sections of manuscript separately")
+            use_multimodal = st.checkbox("Multi-modal Analysis", value=False,  # DISABLED by default 
+                                       help="Analyze different sections of manuscript separately (may cause issues)")
         with col_methods2:
             use_ensemble = st.checkbox("Ensemble Matching", value=False,
                                      help="Combine multiple matching strategies for better accuracy")
@@ -506,10 +506,10 @@ def find_matching_journals(abstract_text):
                 top_k=top_k,
                 min_similarity=min_similarity,
                 filters=filters if filters else None,
-                include_study_classification=True,
-                use_multimodal_analysis=use_multimodal,
-                use_ensemble_matching=use_ensemble,
-                include_ranking_analysis=True
+                include_study_classification=False,  # DISABLED - may cause issues
+                use_multimodal_analysis=False,  # DISABLED - use simple search
+                use_ensemble_matching=False,  # DISABLED - use simple search
+                include_ranking_analysis=False  # DISABLED - may cause issues
             )
         
         if results:
@@ -1158,7 +1158,7 @@ def display_database_info():
                 'Name': journal.get('display_name', 'Unknown'),
                 'SJR Rank': rank_display,
                 'SJR Score': f"{journal.get('sjr_score', 0):.2f}" if journal.get('sjr_score') else "N/A",
-                'H-Index': journal.get('h_index', 0) or "N/A",
+                'H-Index': str(journal.get('h_index', 0) or "N/A"),  # Convert to string to avoid Arrow conversion issues
                 'Publisher': journal.get('publisher', 'Unknown'),
                 'Country': journal.get('country', 'Unknown'),
                 'Articles': f"{journal.get('works_count', 0):,}",
